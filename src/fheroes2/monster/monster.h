@@ -267,14 +267,15 @@ public:
 
     int icnFile() const;
     int frameId() const;
-    bool isMovement() const;
+    int offset() const;
 
 private:
     Monster::monstersprite_t _sprite;
     std::vector<int> _validMoves;
     std::list<int> _frameSet;
     int _frameId;
-    bool _isMovement;
+    int _moveId;
+    std::vector< int > _movementOffset;
 
     void _pushFrames( const Monster::animframe_t & info );
 };

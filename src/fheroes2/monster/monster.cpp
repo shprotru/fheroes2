@@ -174,7 +174,7 @@ namespace
 
         // icn_file      idle     move     fly1     fly2     fly3     shot0    shot1    shot2    shot3    attk0    attk1    attk2    attk3    wcne     kill     m82_attk
         // m82_kill       m82_move       m82_wnce
-        {ICN::GOBLIN, {33, 7}, {1, 9},  {0, 0},  {0, 0},  {0, 0},  {0, 0},        {0, 0},        {0, 0},        {0, 0},
+        {ICN::GOBLIN, {33, 7}, {2, 7},  {0, 0},  {0, 0},  {0, 0},  {0, 0},        {0, 0},        {0, 0},        {0, 0},
          {10, 3},     {17, 4}, {13, 4}, {21, 4}, {25, 4}, {29, 4}, M82::GBLNATTK, M82::GBLNKILL, M82::GBLNMOVE, M82::GBLNWNCE},
         {ICN::ORC, {1, 4},  {5, 8},  {0, 0},  {0, 0},  {0, 0},  {16, 13},      {0, 0},        {0, 0},        {0, 0},
          {28, 2},  {30, 3}, {33, 4}, {37, 3}, {13, 3}, {40, 4}, M82::ORC_ATTK, M82::ORC_KILL, M82::ORC_MOVE, M82::ORC_WNCE},
@@ -188,7 +188,7 @@ namespace
          {0, 0},     {16, 6}, {22, 7}, {29, 8}, {13, 3}, {37, 4}, M82::OGREATTK, M82::OGREKILL, M82::OGREMOVE, M82::OGREWNCE},
         {ICN::TROLL, {16, 7}, {1, 15}, {0, 0},  {0, 0},  {0, 0},  {23, 5},       {0, 0},        {0, 0},        {0, 0},
          {0, 0},     {48, 6}, {23, 6}, {29, 5}, {54, 3}, {57, 9}, M82::TRLLATTK, M82::TRLLKILL, M82::TRLLMOVE, M82::TRLLWNCE},
-        {ICN::TROLL2, {16, 7}, {1, 15}, {0, 0},  {0, 0},  {0, 0},  {23, 5},       {0, 0},        {0, 0},        {0, 0},
+        {ICN::TROLL2, {16, 7}, {2, 14}, {0, 0},  {0, 0},  {0, 0},  {23, 5},       {0, 0},        {0, 0},        {0, 0},
          {0, 0},      {48, 6}, {23, 6}, {29, 5}, {54, 3}, {57, 9}, M82::TRLLATTK, M82::TRLLKILL, M82::TRLLMOVE, M82::TRLLWNCE},
         {ICN::CYCLOPS, {30, 9}, {1, 7}, {0, 0},  {0, 0},  {0, 0},  {0, 0},        {16, 2},       {11, 2},       {21, 2},
          {0, 0},       {14, 3}, {8, 3}, {18, 3}, {23, 2}, {25, 5}, M82::CYCLATTK, M82::CYCLKILL, M82::CYCLMOVE, M82::CYCLWNCE},
@@ -321,6 +321,29 @@ namespace
     {
         if ( !isValidAnimationFrame( frameInfo ) )
             Error::Except( __FUNCTION__, "animframe_t should not be empty" );
+    }
+
+    // ICN id plus 16 frames per movement. Total is 17 numbers
+    const int monsterMovementOffset[] = {
+        ICN::GOBLIN, 0x00, 0x05, 0x0A, 0x11, 0x16, 0x1C, 0x20, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ICN::TROLL,  0x00, 0x04, 0x06, 0x0A, 0x0D, 0x11, 0x14, 0x19, 0x1C, 0x1F, 0x23, 0x25, 0x28, 0x2A, 0x00, 0x00,
+        ICN::TROLL2, 0x00, 0x04, 0x06, 0x0A, 0x0D, 0x11, 0x14, 0x19, 0x1C, 0x1F, 0x23, 0x25, 0x28, 0x2A, 0x00, 0x00,
+        ICN::WOLF  , 0x05, 0x0C, 0x14, 0x1C, 0x24, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+    };
+
+    std::vector<int> getIcnMovementOffsetInfo( const Monster & monster )
+    {
+        static const size_t size = sizeof( monsterMovementOffset ) / sizeof( int ) / 17;
+        const int icnId = monster.GetMonsterSprite().icn_file;
+
+        for ( size_t i = 0; i < size; ++i ) {
+            if ( icnId == monsterMovementOffset[i * 17] ) {
+                return std::vector<int>( monsterMovementOffset + i * 17 + 1, monsterMovementOffset + i * 17 + 16 );
+            }
+        }
+
+        std::vector<int> empty( 16, 0 );
+        return empty;
     }
 }
 
@@ -1777,38 +1800,42 @@ const Monster::monstersprite_t & Monster::GetMonsterSprite() const
 MonsterAnimation::MonsterAnimation( const Monster & monster )
     : _sprite( monster.GetMonsterSprite() )
     , _frameId( _sprite.frm_idle.start )
-    , _isMovement( false )
+    , _moveId(  Monster::AS_NONE )
+    , _movementOffset( getIcnMovementOffsetInfo( monster ) )
 {
+    if ( _movementOffset.size() < _sprite.frm_move.count )
+        Error::Except( __FUNCTION__, "Number of frames for movement is more than 16" );
+
     verifyValidAnimationFrame( _sprite.frm_idle );
     // verifyValidAnimationFrame( _sprite.frm_wnce );
     // verifyValidAnimationFrame( _sprite.frm_kill );
 
     if ( isValidAnimationFrame( _sprite.frm_idle ) )
         _validMoves.push_back( Monster::AS_IDLE );
-    // if ( isValidAnimationFrame( _sprite.frm_move ) )
-    //     _validMoves.push_back( Monster::AS_MOVE );
-    if ( isValidAnimationFrame( _sprite.frm_fly1 ) )
-        _validMoves.push_back( Monster::AS_FLY1 );
-    if ( isValidAnimationFrame( _sprite.frm_fly2 ) )
-        _validMoves.push_back( Monster::AS_FLY2 );
-    if ( isValidAnimationFrame( _sprite.frm_fly3 ) )
-        _validMoves.push_back( Monster::AS_FLY3 );
-    if ( isValidAnimationFrame( _sprite.frm_shot0 ) )
-        _validMoves.push_back( Monster::AS_SHOT0 );
-    if ( isValidAnimationFrame( _sprite.frm_shot1 ) )
-        _validMoves.push_back( Monster::AS_SHOT1 );
-    if ( isValidAnimationFrame( _sprite.frm_shot2 ) )
-        _validMoves.push_back( Monster::AS_SHOT2 );
-    if ( isValidAnimationFrame( _sprite.frm_shot3 ) )
-        _validMoves.push_back( Monster::AS_SHOT3 );
-    if ( isValidAnimationFrame( _sprite.frm_attk0 ) )
-        _validMoves.push_back( Monster::AS_ATTK0 );
-    if ( isValidAnimationFrame( _sprite.frm_attk1 ) )
-        _validMoves.push_back( Monster::AS_ATTK1 );
-    if ( isValidAnimationFrame( _sprite.frm_attk2 ) )
-        _validMoves.push_back( Monster::AS_ATTK2 );
-    if ( isValidAnimationFrame( _sprite.frm_attk3 ) )
-        _validMoves.push_back( Monster::AS_ATTK3 );
+    if ( isValidAnimationFrame( _sprite.frm_move ) )
+        _validMoves.push_back( Monster::AS_MOVE );
+    // if ( isValidAnimationFrame( _sprite.frm_fly1 ) )
+    //     _validMoves.push_back( Monster::AS_FLY1 );
+    // if ( isValidAnimationFrame( _sprite.frm_fly2 ) )
+    //     _validMoves.push_back( Monster::AS_FLY2 );
+    // if ( isValidAnimationFrame( _sprite.frm_fly3 ) )
+    //     _validMoves.push_back( Monster::AS_FLY3 );
+    // if ( isValidAnimationFrame( _sprite.frm_shot0 ) )
+    //     _validMoves.push_back( Monster::AS_SHOT0 );
+    // if ( isValidAnimationFrame( _sprite.frm_shot1 ) )
+    //     _validMoves.push_back( Monster::AS_SHOT1 );
+    // if ( isValidAnimationFrame( _sprite.frm_shot2 ) )
+    //     _validMoves.push_back( Monster::AS_SHOT2 );
+    // if ( isValidAnimationFrame( _sprite.frm_shot3 ) )
+    //     _validMoves.push_back( Monster::AS_SHOT3 );
+    // if ( isValidAnimationFrame( _sprite.frm_attk0 ) )
+    //     _validMoves.push_back( Monster::AS_ATTK0 );
+    // if ( isValidAnimationFrame( _sprite.frm_attk1 ) )
+    //     _validMoves.push_back( Monster::AS_ATTK1 );
+    // if ( isValidAnimationFrame( _sprite.frm_attk2 ) )
+    //     _validMoves.push_back( Monster::AS_ATTK2 );
+    // if ( isValidAnimationFrame( _sprite.frm_attk3 ) )
+    //     _validMoves.push_back( Monster::AS_ATTK3 );
     // if ( isValidAnimationFrame( _sprite.frm_wnce ) )
     //    _validMoves.push_back( Monster::AS_WNCE );
     // if ( isValidAnimationFrame( _sprite.frm_kill ) )
@@ -1823,26 +1850,22 @@ MonsterAnimation::MonsterAnimation( const Monster & monster )
 void MonsterAnimation::increment()
 {
     if ( _frameSet.empty() ) {
-        _isMovement = false;
+        _moveId = *Rand::Get( _validMoves );
 
-        const int moveId = *Rand::Get( _validMoves );
-
-        if ( moveId == Monster::AS_NONE ) {
+        if ( _moveId == Monster::AS_NONE ) {
             const u32 counter = Rand::Get( 10, 20 );
             for ( u32 i = 0; i < counter; ++i )
                 _frameSet.push_back( _sprite.frm_idle.start );
         }
-        else if ( moveId == Monster::AS_IDLE ) {
+        else if ( _moveId == Monster::AS_IDLE ) {
             _pushFrames( _sprite.frm_idle );
         }
-        else if ( moveId == Monster::AS_MOVE ) {
+        else if ( _moveId == Monster::AS_MOVE ) {
             const u32 counter = Rand::Get( 3, 5 );
             for ( u32 i = 0; i < counter; ++i )
                 _pushFrames( _sprite.frm_move );
-
-            _isMovement = true;
         }
-        else if ( moveId == Monster::AS_FLY1 || moveId == Monster::AS_FLY2 || moveId == Monster::AS_FLY3 ) {
+        else if ( _moveId == Monster::AS_FLY1 || _moveId == Monster::AS_FLY2 || _moveId == Monster::AS_FLY3 ) {
             _pushFrames( _sprite.frm_fly1 );
 
             const u32 counter = Rand::Get( 3, 5 );
@@ -1851,34 +1874,34 @@ void MonsterAnimation::increment()
 
             _pushFrames( _sprite.frm_fly3 );
         }
-        else if ( moveId == Monster::AS_SHOT0 ) {
+        else if ( _moveId == Monster::AS_SHOT0 ) {
             _pushFrames( _sprite.frm_shot0 );
         }
-        else if ( moveId == Monster::AS_SHOT1 ) {
+        else if ( _moveId == Monster::AS_SHOT1 ) {
             _pushFrames( _sprite.frm_shot1 );
         }
-        else if ( moveId == Monster::AS_SHOT2 ) {
+        else if ( _moveId == Monster::AS_SHOT2 ) {
             _pushFrames( _sprite.frm_shot2 );
         }
-        else if ( moveId == Monster::AS_SHOT3 ) {
+        else if ( _moveId == Monster::AS_SHOT3 ) {
             _pushFrames( _sprite.frm_shot3 );
         }
-        else if ( moveId == Monster::AS_ATTK0 ) {
+        else if ( _moveId == Monster::AS_ATTK0 ) {
             _pushFrames( _sprite.frm_attk0 );
         }
-        else if ( moveId == Monster::AS_ATTK1 ) {
+        else if ( _moveId == Monster::AS_ATTK1 ) {
             _pushFrames( _sprite.frm_attk1 );
         }
-        else if ( moveId == Monster::AS_ATTK2 ) {
+        else if ( _moveId == Monster::AS_ATTK2 ) {
             _pushFrames( _sprite.frm_attk2 );
         }
-        else if ( moveId == Monster::AS_ATTK3 ) {
+        else if ( _moveId == Monster::AS_ATTK3 ) {
             _pushFrames( _sprite.frm_attk3 );
         }
-        else if ( moveId == Monster::AS_WNCE ) {
+        else if ( _moveId == Monster::AS_WNCE ) {
             _pushFrames( _sprite.frm_wnce );
         }
-        else if ( moveId == Monster::AS_KILL ) {
+        else if ( _moveId == Monster::AS_KILL ) {
             _pushFrames( _sprite.frm_kill );
             const u32 counter = Rand::Get( 1, 10 );
             for ( u32 i = 0; i < counter; ++i )
@@ -1900,9 +1923,12 @@ int MonsterAnimation::frameId() const
     return _frameId;
 }
 
-bool MonsterAnimation::isMovement() const
+int MonsterAnimation::offset() const
 {
-    return _isMovement;
+    if ( _moveId == Monster::AS_MOVE )
+        return _movementOffset[_frameId - _sprite.frm_move.start];
+
+    return 0;
 }
 
 void MonsterAnimation::_pushFrames( const Monster::animframe_t & info )
