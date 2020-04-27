@@ -692,7 +692,7 @@ int Interface::Basic::HumanTurn( bool isload )
         isOngoingFastScrollEvent = false;
 
         // hot keys
-        if ( le.KeyPress() ) {
+        if ( le.KeyPress() || le.MousePressLeft() ) {
             if ( isMovingHero )
                 stopHero = true;
             // exit dialog
